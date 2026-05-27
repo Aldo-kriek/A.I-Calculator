@@ -59,3 +59,7 @@ Google Gemini API: Powering the AI features.
 Contributing
 
 Feel free to fork this project, suggest improvements, or submit pull requests. I’m always looking to refine the UI and expand the AI capabilities!
+
+
+<img width="1389" height="967" alt="image" src="https://github.com/user-attachments/assets/4199c80d-c078-4ba7-ae0b-70a0bd1fc564" />
+
