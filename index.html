@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fullscreen Pro Calculator - V7</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: sans-serif; transition: background 0.6s ease, color 0.3s ease; }
+        .calc-btn { transition: all 0.2s; font-size: 1.5rem; font-weight: 600; }
+        .calc-btn:active { transition: all 0.1s; transform: scale(0.95); }
+        #calc-container { transition: all 0.5s ease; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
+        #modal-text::-webkit-scrollbar, #history-list::-webkit-scrollbar { width: 6px; }
+        #modal-text::-webkit-scrollbar-track, #history-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+        #modal-text::-webkit-scrollbar-thumb, #history-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        .sidebar-btn { transition: all 0.3s ease; cursor: pointer; }
+        .sidebar-btn:hover { padding-left: 2rem; border-left-width: 8px; background-color: rgba(255,255,255,0.25); }
+        #loader { transition: opacity 0.8s ease; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" id="app-body">
+
+    <!-- Loading Screen -->
+    <div id="loader" class="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center">
+        <div class="text-white text-6xl font-black tracking-widest animate-pulse">CALCULATING...</div>
+        <div class="mt-8 w-64 h-2 bg-white/10 rounded-full overflow-hidden">
+            <div class="h-full bg-blue-500 animate-[loading_3s_linear_forwards]"></div>
+        </div>
+    </div>
+    <style>@keyframes loading { from { width: 0%; } to { width: 100%; } }</style>
+
+    <!-- AI Modal -->
+    <div id="explanation-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div id="modal-content" class="bg-slate-900 border-2 p-8 rounded-3xl max-w-lg w-full shadow-2xl relative">
+            <button onclick="closeModal()" class="absolute top-4 right-6 text-2xl hover:opacity-70 transition">×</button>
+            <h2 id="modal-title" class="text-2xl font-bold mb-4 uppercase tracking-wider">AI Insight</h2>
+            <div id="modal-text" class="text-lg leading-relaxed opacity-90 max-h-[50vh] overflow-y-auto pr-2 mb-4">Analyzing...</div>
+            <div class="flex gap-2">
+                <input id="custom-prompt" type="text" placeholder="Ask follow-up..." class="flex-1 bg-white/10 p-3 rounded-xl border border-white/20 outline-none focus:border-blue-500 text-white">
+                <button onclick="askCustom()" class="bg-blue-600 px-6 py-3 rounded-xl hover:bg-blue-500 transition font-bold text-white">Ask</button>
+            </div>
+            <button onclick="playAudio()" id="audio-btn" class="w-full mt-3 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition font-bold text-white">🔊 Listen to this</button>
+        </div>
+    </div>
+
+    <!-- API Key Modal -->
+    <div id="key-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="bg-slate-900 border-2 border-yellow-500 p-8 rounded-3xl max-w-md w-full shadow-2xl text-center">
+            <h2 class="text-2xl font-bold mb-4 text-yellow-500">API Key Required</h2>
+            <p class="text-white/70 mb-6 text-sm">Paste your Gemini API key below. It's saved locally in your browser.</p>
+            <input id="api-key-input" type="password" placeholder="AIza..." class="w-full bg-white/10 p-3 rounded-xl border border-white/20 mb-4 text-white outline-none">
+            <button onclick="saveApiKey()" class="w-full bg-yellow-600 p-3 rounded-xl font-bold text-white">Save Key</button>
+        </div>
+    </div>
+
+    <!-- Toolbar: Refresh (Right) and Settings (Right) -->
+    <div class="fixed top-10 right-6 z-40 flex gap-2">
+        <button onclick="showKeyModal()" class="bg-white/20 p-4 rounded-2xl text-white backdrop-blur-md shadow-lg border border-white/10 hover:bg-white/30 transition">🔑</button>
+        <button onclick="location.reload()" class="bg-white/20 p-4 rounded-2xl text-white backdrop-blur-md shadow-lg border border-white/10 hover:bg-white/30 transition hover:rotate-180 duration-500">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+    </div>
+
+    <!-- Theme Menu -->
+    <div class="fixed top-10 left-6 z-[100]">
+        <button id="theme-btn" class="bg-white/20 p-4 rounded-2xl text-white backdrop-blur-md shadow-lg border border-white/10 hover:bg-white/30 transition">🎨 Theme</button>
+        <div class="hidden absolute left-0 mt-4 w-64 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-2xl grid grid-cols-5 gap-2 max-h-96 overflow-y-auto z-[100]" id="skin-selector"></div>
+    </div>
+
+    <!-- Sidebar AI Tools -->
+    <div class="hidden md:flex flex-col gap-3 fixed left-6 top-1/2 -translate-y-1/2 z-40">
+        <button onclick="runAi('convert')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">🔄 Convert</button>
+        <button onclick="runAi('explain')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">✨ Explain</button>
+        <button onclick="runAi('formula')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">⚗️ Formula</button>
+        <button onclick="runAi('joke')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">🤡 Joke</button>
+        <button onclick="runAi('quiz')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">📝 Quiz</button>
+        <button onclick="runAi('solve')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">🧮 Solve</button>
+        <button onclick="runAi('wordProblem')" class="sidebar-btn text-left bg-white/10 hover:bg-white/20 text-white px-6 py-4 rounded-r-2xl border-l-4 border-white/20 backdrop-blur-md">📖 Story</button>
+    </div>
+
+    <!-- History Panel -->
+    <div class="hidden lg:flex flex-col gap-2 fixed right-6 top-1/2 -translate-y-1/2 w-48 h-[40vh] bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/10 text-white z-40">
+        <h3 class="text-lg font-bold uppercase tracking-wider mb-4 border-b border-white/20 pb-2">History</h3>
+        <div id="history-list" class="overflow-y-auto flex-1 pr-1"></div>
+    </div>
+
+    <div class="absolute top-10 w-full flex items-center justify-center">
+        <h1 id="main-heading" class="text-5xl font-black uppercase tracking-widest">Calculator</h1>
+    </div>
+
+    <div class="w-full max-w-md bg-opacity-20 backdrop-blur-lg p-8 rounded-3xl shadow-2xl border-2 transition-colors mt-20" id="calc-container">
+        <div id="display" class="w-full text-right text-6xl font-bold mb-8 p-6 bg-black/20 rounded-2xl overflow-x-auto text-white border">0</div>
+        <div class="grid grid-cols-4 gap-4" id="keypad"></div>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => setTimeout(() => document.getElementById('loader').remove(), 3000));
+        
+        const modal = document.getElementById('explanation-modal');
+        const modalText = document.getElementById('modal-text');
+        const modalTitle = document.getElementById('modal-title');
+        const display = document.getElementById('display');
+        const heading = document.getElementById('main-heading');
+        const calcContainer = document.getElementById('calc-container');
+        const appBody = document.getElementById('app-body');
+        const historyList = document.getElementById('history-list');
+        const sidebarBtns = document.querySelectorAll('.sidebar-btn');
+        
+        let currentInput = '0';
+        let aiResponse = "";
+        const keypad = document.getElementById('keypad');
+        const buttons = ['C', '±', '%', '÷', '7', '8', '9', '×', '4', '5', '6', '-', '1', '2', '3', '+', '0', '.', '='];
+
+        function showKeyModal() { document.getElementById('key-modal').classList.remove('hidden'); }
+        function saveApiKey() { 
+            localStorage.setItem('gemini_key', document.getElementById('api-key-input').value);
+            document.getElementById('key-modal').classList.add('hidden');
+        }
+
+        async function runAi(mode, promptOverride = null) {
+            const apiKey = localStorage.getItem('gemini_key');
+            if(!apiKey) { showKeyModal(); return; }
+            if (currentInput === '0' && !promptOverride) return;
+
+            modal.classList.remove('hidden');
+            modalText.innerText = "Consulting the AI...";
+            const prompts = { 'convert': `Convert: ${currentInput}`, 'explain': `Explain: ${currentInput}`, 'formula': `Formula: ${currentInput}`, 'joke': `Joke about: ${currentInput}`, 'quiz': `3-question quiz for: ${currentInput}`, 'solve': `Solve: ${currentInput}`, 'wordProblem': `Story for: ${currentInput}` };
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: promptOverride || prompts[mode] }] }] }) });
+                const data = await response.json();
+                aiResponse = data.candidates[0].content.parts[0].text;
+                modalTitle.innerText = mode.toUpperCase();
+                modalText.innerText = aiResponse;
+            } catch (e) { modalText.innerText = "Error! Ensure your API key is correct."; }
+        }
+
+        function closeModal() { modal.classList.add('hidden'); }
+
+        // Keyboard & Input Logic remains same
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '0' && e.key <= '9') handleInput(e.key);
+            else if (['+', '-', '*', '/'].includes(e.key)) handleInput(e.key === '*' ? '×' : e.key === '/' ? '÷' : e.key);
+            else if (e.key === 'Enter') handleInput('=');
+            else if (e.key === 'Escape') handleInput('C');
+            else if (e.key === '.') handleInput('.');
+        });
+
+        function handleInput(val) {
+            if (val === 'C') currentInput = '0';
+            else if (val === '=') {
+                try {
+                    const result = eval(currentInput.replace('×','*').replace('÷','/')).toString();
+                    const div = document.createElement('div');
+                    div.className = "mb-2 p-2 border-b border-white/10 text-sm";
+                    div.innerText = `${currentInput} = ${result}`;
+                    historyList.prepend(div);
+                    currentInput = result;
+                } catch { currentInput = 'Error'; }
+            } else { if (currentInput === '0' || currentInput === 'Error') currentInput = val; else currentInput += val; }
+            display.innerText = currentInput;
+        }
+
+        buttons.forEach(btn => {
+            const b = document.createElement('button');
+            b.innerText = btn;
+            b.className = "calc-btn h-20 rounded-2xl bg-white/10 hover:bg-white/20 text-white";
+            if (btn === '=') b.className += " col-span-2";
+            b.onclick = () => handleInput(btn);
+            keypad.appendChild(b);
+        });
+
+        function applyTheme(bg, accent) {
+            appBody.style.background = bg;
+            calcContainer.style.borderColor = accent;
+            calcContainer.style.boxShadow = `0 0 25px ${accent}44`;
+            heading.style.color = accent;
+            display.style.color = accent;
+            display.style.borderColor = accent;
+            sidebarBtns.forEach(btn => { btn.style.borderColor = accent; btn.style.backgroundColor = `${accent}22`; });
+        }
+
+        document.getElementById('theme-btn').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('skin-selector').classList.toggle('hidden'); });
+        Array.from({length: 50}).forEach((_, i) => {
+            const div = document.createElement('button');
+            div.className = "h-8 rounded-lg";
+            div.style.backgroundColor = `hsl(${i * 7}, 80%, 50%)`;
+            div.onclick = (e) => { e.stopPropagation(); applyTheme(`hsl(${i * 7}, 40%, 15%)`, `hsl(${i * 7}, 80%, 50%)`); document.getElementById('skin-selector').classList.add('hidden'); };
+            document.getElementById('skin-selector').appendChild(div);
+        });
+
+        applyTheme('#0f172a', '#2563eb');
+    </script>
+</body>
+</html>
